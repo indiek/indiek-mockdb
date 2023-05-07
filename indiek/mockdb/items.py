@@ -29,7 +29,7 @@ class Item:
         name = self.name
         content_hash = hash(self.content)
         return f"MockDB Item:{_ikid=};{name=};{content_hash=}"
-    
+
     def __str__(self):
         return f"MockDB Item with ID {self._ikid} and name {self.name}"
 
@@ -57,19 +57,9 @@ class Item:
         self.name = name
         self.content = content
 
-    def save(self) -> int:
-        """Save instance data into mockdb.
-
-        If the instance doesn't have an id, (`ikid` attr), a new unique one
-        is generated add added before saving.
-
-        Returns:
-            int: _ikid of item
-        """
-        if self._ikid is None:
-            self._ikid = generate_id(self._item_dict.keys())
-        self._item_dict[self._ikid] = self.to_dict()
-        return self._ikid
+    def save(self):
+        raise NotImplementedError(
+            f"Use specific Item type (subclass of {self.__class__.__name__}) to save.")
 
     def to_dict(self):
         """Return mockdb Item instance content as dict.
@@ -83,30 +73,30 @@ class Item:
             'content': self.content
         }
 
-    @staticmethod
-    def from_core(pure_item: Any) -> Item:
+    @classmethod
+    def from_core(cls, pure_item: Any) -> Item:
         """Instantiate mockdb Item off of an Item from indiek-core.
 
         Args:
             pure_item (Any): item instance from indiek-core library.
 
         Returns:
-            Item: mockdb Item instance
+            type(self): mockdb Item instance
         """
-        return Item(**pure_item.to_dict())
+        return cls(**pure_item.to_dict())
 
-    @staticmethod
-    def load(_ikid: int) -> Item:
+    @classmethod
+    def load(cls, _ikid: int) -> Item:
         """Load (instantiate) mockdb Item from its ID.
 
         Args:
-            ikid (int): item ID in mockdb.
+            _ikid (int): item ID in mockdb.
 
         Returns:
             Item: mockdb Item instance
         """
-        dict_ = Item._item_dict[_ikid]
-        return Item(**dict_)
+        dict_ = cls._item_dict[_ikid]
+        return cls(**dict_)
 
     @classmethod
     def list_all(cls) -> List[Item]:
@@ -116,3 +106,73 @@ class Item:
             List[Item]: stored items.
         """
         return [cls(**item_dict) for item_dict in cls._item_dict.values()]
+
+
+class Definition(Item):
+    _item_dict = {}
+    """All definition items are stored in this class variable that maps item unique ID to their content."""
+
+    def save(self) -> int:
+        """Save instance data into mockdb.
+
+        If the instance doesn't have an id, (`ikid` attr), a new unique one (at global Item level)
+        is generated add added before saving.
+
+        Returns:
+            int: _ikid of item
+        """
+        if self._ikid is None:
+            self._ikid = generate_id(super()._item_dict.keys())
+
+        # update type-specific dict
+        self._item_dict[self._ikid] = self.to_dict()
+
+        # update generic Item dict
+        super()._item_dict[self._ikid] = self.to_dict()
+        return self._ikid
+
+
+class Theorem(Item):
+    _item_dict = {}
+
+    def save(self) -> int:
+        """Save instance data into mockdb.
+
+        If the instance doesn't have an id, (`ikid` attr), a new unique one (at global Item level)
+        is generated add added before saving.
+
+        Returns:
+            int: _ikid of item
+        """
+        if self._ikid is None:
+            self._ikid = generate_id(super()._item_dict.keys())
+
+        # update type-specific dict
+        self._item_dict[self._ikid] = self.to_dict()
+
+        # update generic Item dict
+        super()._item_dict[self._ikid] = self.to_dict()
+        return self._ikid
+
+
+class Proof(Item):
+    _item_dict = {}
+
+    def save(self) -> int:
+        """Save instance data into mockdb.
+
+        If the instance doesn't have an id, (`ikid` attr), a new unique one (at global Item level)
+        is generated add added before saving.
+
+        Returns:
+            int: _ikid of item
+        """
+        if self._ikid is None:
+            self._ikid = generate_id(super()._item_dict.keys())
+
+        # update type-specific dict
+        self._item_dict[self._ikid] = self.to_dict()
+
+        # update generic Item dict
+        super()._item_dict[self._ikid] = self.to_dict()
+        return self._ikid
