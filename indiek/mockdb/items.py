@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from typing import Sequence, Dict, Optional, List, Any
 
 
@@ -72,6 +73,28 @@ class Item:
             'name': self.name,
             'content': self.content
         }
+    
+    @classmethod
+    def str_filter(cls, regex: re.Pattern):
+        """Acts as list_all, but only returns items with regex match.
+
+        Regex is applied on name and content attr.
+
+        Args:
+            regex (re.Pattern): regex to match
+
+        Returns:
+            List[Item]: filtered list of stored items
+        """
+        filtered_dicts = []
+        for item_dict in cls._item_dict.values():
+            if regex.search(item_dict['name']):
+                filtered_dicts.append(item_dict)
+                continue
+            if regex.search(item_dict['content']):
+                filtered_dicts.append(item_dict)
+
+        return [cls(**item_dict) for item_dict in filtered_dicts]
 
     @classmethod
     def from_core(cls, pure_item: Any) -> Item:
