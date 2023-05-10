@@ -1,6 +1,15 @@
 from __future__ import annotations
 import re
-from typing import Sequence, Dict, Optional, List, Any
+from typing import Sequence, Optional, List, Any
+from frozendict import frozendict
+
+
+class MixedTypeOverrideError(Exception):
+    """
+    An item is trying to be saved with an ID 
+    pertaining to an existing item of a different type.
+    """
+    pass
 
 
 def generate_id(existing: Sequence[int]) -> int:
@@ -22,8 +31,15 @@ class Item:
         _ikid (int): ID of item in mockdb. This is not part of indiek-core API.
     """
 
-    _item_dict = {}
-    """All items are stored in this class variable that maps item unique ID to their content."""
+    _item_dict = frozendict(
+        Definition = {},  # keys MUST match class names from module
+        Theorem = {},
+        Proof = {},
+    )
+    """
+    All items are stored in this class variable. It is a nested dict. First level of 
+    keys are classes, and values are dicts. Second level of keys are item unique IDs 
+    (_ikid) and values are dicts containing item data."""
 
     def __repr__(self):
         _ikid = self._ikid
@@ -59,8 +75,23 @@ class Item:
         self.content = content
 
     def save(self):
-        raise NotImplementedError(
-            f"Use specific Item type (subclass of {self.__class__.__name__}) to save.")
+        myclass = self.__class__.__name__
+
+        # check existing ids
+        existing_ids = set.union(*(set(d.keys()) for d in self._item_dict.values()))
+
+        if self._ikid is not None:  # item has an ID
+            if self._ikid in existing_ids:  # ID already present in DB
+                if self._ikid not in self._item_dict[myclass].keys():  # ID belongs to another type
+                    raise MixedTypeOverrideError()
+                # at this level we are dealing with an override; relegated to end of function
+                
+        else:  # we generate the ID
+            self._ikid = generate_id(existing_ids)
+
+        # we write or override safely
+        self._item_dict[myclass][self._ikid] = self.to_dict()
+        return self._ikid
 
     def to_dict(self):
         """Return mockdb Item instance content as dict.
@@ -76,7 +107,7 @@ class Item:
     
     @classmethod
     def str_filter(cls, regex: re.Pattern):
-        """Acts as list_all, but only returns items with regex match.
+        """Return list of items from specified class with a regex match.
 
         Regex is applied on name and content attr.
 
@@ -87,7 +118,7 @@ class Item:
             List[Item]: filtered list of stored items
         """
         filtered_dicts = []
-        for item_dict in cls._item_dict.values():
+        for item_dict in cls._item_dict[cls.__name__].values():
             if regex.search(item_dict['name']):
                 filtered_dicts.append(item_dict)
                 continue
@@ -118,7 +149,7 @@ class Item:
         Returns:
             Item: mockdb Item instance
         """
-        dict_ = cls._item_dict[_ikid]
+        dict_ = cls._item_dict[cls.__name__][_ikid]
         return cls(**dict_)
 
     @classmethod
@@ -128,74 +159,15 @@ class Item:
         Returns:
             List[Item]: stored items.
         """
-        return [cls(**item_dict) for item_dict in cls._item_dict.values()]
+        class_items = cls._item_dict[cls.__name__]
+        return [cls(**item_dict) for item_dict in class_items.values()]
 
 
 class Definition(Item):
-    _item_dict = {}
-    """All definition items are stored in this class variable that maps item unique ID to their content."""
-
-    def save(self) -> int:
-        """Save instance data into mockdb.
-
-        If the instance doesn't have an id, (`ikid` attr), a new unique one (at global Item level)
-        is generated add added before saving.
-
-        Returns:
-            int: _ikid of item
-        """
-        if self._ikid is None:
-            self._ikid = generate_id(super()._item_dict.keys())
-
-        # update type-specific dict
-        self._item_dict[self._ikid] = self.to_dict()
-
-        # update generic Item dict
-        super()._item_dict[self._ikid] = self.to_dict()
-        return self._ikid
-
+    pass
 
 class Theorem(Item):
-    _item_dict = {}
-
-    def save(self) -> int:
-        """Save instance data into mockdb.
-
-        If the instance doesn't have an id, (`ikid` attr), a new unique one (at global Item level)
-        is generated add added before saving.
-
-        Returns:
-            int: _ikid of item
-        """
-        if self._ikid is None:
-            self._ikid = generate_id(super()._item_dict.keys())
-
-        # update type-specific dict
-        self._item_dict[self._ikid] = self.to_dict()
-
-        # update generic Item dict
-        super()._item_dict[self._ikid] = self.to_dict()
-        return self._ikid
-
+    pass
 
 class Proof(Item):
-    _item_dict = {}
-
-    def save(self) -> int:
-        """Save instance data into mockdb.
-
-        If the instance doesn't have an id, (`ikid` attr), a new unique one (at global Item level)
-        is generated add added before saving.
-
-        Returns:
-            int: _ikid of item
-        """
-        if self._ikid is None:
-            self._ikid = generate_id(super()._item_dict.keys())
-
-        # update type-specific dict
-        self._item_dict[self._ikid] = self.to_dict()
-
-        # update generic Item dict
-        super()._item_dict[self._ikid] = self.to_dict()
-        return self._ikid
+    pass
