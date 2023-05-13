@@ -41,6 +41,9 @@ class Item:
     keys are classes, and values are dicts. Second level of keys are item unique IDs 
     (_ikid) and values are dicts containing item data."""
 
+    _attr_defs = ['name', 'content', '_ikid']
+    """List of attr that fully define an Item."""
+
     def __repr__(self):
         _ikid = self._ikid
         name = self.name
@@ -51,10 +54,8 @@ class Item:
         return f"MockDB Item with ID {self._ikid} and name {self.name}"
 
     def __eq__(self, other) -> bool:
-        cond = self._ikid == other._ikid
-        cond = cond and self.name == other.name
-        cond = cond and self.content == other.content
-        return cond and isinstance(other, self.__class__)
+        attr_eq = all(getattr(self, a) == getattr(other, a) for a in Item._attr_defs)
+        return attr_eq and type(other) == type(self)
 
     def __init__(
             self, *,
@@ -99,11 +100,19 @@ class Item:
         Returns:
             dict: mockdb Item instance
         """
-        return {
-            '_ikid': self._ikid,
-            'name': self.name,
-            'content': self.content
-        }
+        return {a: getattr(self, a) for a in self._attr_defs}
+    
+    def delete(self):
+        if self._ikid is not None:
+            self._item_dict[self.__class__.__name__].pop(self._ikid)
+            self._ikid = None
+
+    def reload(self):
+        """Reload written values if _ikid exists otherwise nothing happens."""
+        if self._ikid is not None:
+            written = self._item_dict[self.__class__.__name__][self._ikid]
+            for attribute in self._attr_defs:
+                setattr(self, attribute, written[attribute])
     
     @classmethod
     def str_filter(cls, regex: re.Pattern):

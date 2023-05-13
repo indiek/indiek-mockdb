@@ -20,6 +20,7 @@ class TestItemAPI(unittest.TestCase):
         for attr_name in expected_attr:
             self.assertTrue(hasattr(item, attr_name))
 
+
     def test_comparison(self):
         definition = Definition()
         tmp_prf1, tmp_prf2 = Proof(), Proof()
@@ -32,10 +33,6 @@ class TestItemAPI(unittest.TestCase):
 
         id1 = definition.save()
         self.assertEqual(definition, Definition(_ikid=id1))
-
-        # overriding ID assigned to definition with a proof throws error
-        tmp_prf1._ikid = id1
-        self.assertRaises(MixedTypeOverrideError, tmp_prf1.save)
 
         # because of the type, definition not equal to tmp_prf1
         self.assertNotEqual(tmp_prf1, definition)
@@ -60,6 +57,33 @@ class TestItemIO(unittest.TestCase):
 
         item2 = Theorem.load(item2_dict['_ikid'])
         self.assertDictEqual(item2.to_dict(), item2_dict)
+
+    def test_reload(self):
+        item = Definition(name='blabla')
+        item.save()
+        item.name='fake'
+        item.reload()
+        self.assertEqual(item.name, 'blabla')
+
+    def test_override(self):
+        definition = Definition()
+        tmp_prf1 = Proof()
+        ikid = definition.save()
+        
+        # overriding ID assigned to definition with a proof throws error
+        tmp_prf1._ikid = ikid
+        self.assertRaises(MixedTypeOverrideError, tmp_prf1.save)
+
+        # but after deleting the saved oneit will work
+        definition.delete()
+        tmp_prf1.save()
+        self.assertEqual(tmp_prf1.name, '')
+
+        # override
+        new_prf = Proof(name='tournam', _ikid=ikid)
+        new_prf.save()
+        self.assertEqual(new_prf.name, 'tournam')
+        self.assertEqual(new_prf._ikid, ikid)
 
 
 class TestSearch(unittest.TestCase):
