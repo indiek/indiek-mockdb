@@ -1,5 +1,6 @@
 from .items import Item
 import json
+from frozendict import frozendict
 
 
 def persist(file_path):
@@ -9,4 +10,11 @@ def persist(file_path):
 
 def load_from_file(file_path):
     with open(file_path, 'rt') as f:
-        Item._item_dict = json.load(f)
+        loaded = json.load(f)
+    cleaned = {}
+    for cls_name, cls_dict in loaded.items():
+        # cast ikid to int below
+        sub_dict = {int(ikid): v for ikid, v in cls_dict.items()}
+        cleaned[cls_name] = sub_dict
+
+    Item._item_dict = frozendict(cleaned)
