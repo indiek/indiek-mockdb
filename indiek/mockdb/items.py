@@ -4,6 +4,7 @@ from typing import Sequence, Optional, List, Any
 from frozendict import frozendict
 
 
+
 class MixedTypeOverrideError(Exception):
     """
     An item is trying to be saved with an ID 
@@ -35,6 +36,8 @@ class Item:
         Definition = {},  # keys MUST match class names from module
         Theorem = {},
         Proof = {},
+        Note = {},
+        Question = {}
     )
     """
     All items are stored in this class variable. It is a nested dict. First level of 
@@ -172,11 +175,19 @@ class Item:
         return [cls(**item_dict) for item_dict in class_items.values()]
 
 
-class Definition(Item):
-    pass
+# TODO: automate class create below (__new__?)
+# Note impact of classes below on Item._item_dict
+class Definition(Item): pass
+class Theorem(Item): pass
+class Proof(Item): pass
+class Note(Item): pass
+class Question(Item): pass
 
-class Theorem(Item):
-    pass
 
-class Proof(Item):
-    pass
+ITEM_CLASSES = [
+    Definition, 
+    Theorem, 
+    Proof,
+    Note,
+    Question,
+    ]

@@ -1,9 +1,6 @@
 import unittest
-from indiek.mockdb.items import Definition, Theorem, Proof, MixedTypeOverrideError
+from indiek.mockdb.items import Definition, Theorem, Proof, ITEM_CLASSES, MixedTypeOverrideError
 import re
-
-
-ITEM_CHILDREN = [Definition, Theorem, Proof]
 
 
 class TestItemAPI(unittest.TestCase):
@@ -99,7 +96,7 @@ class TestSearch(unittest.TestCase):
         bambi = re.compile('bambi')
         nany = re.compile('nany')
         bamb = re.compile('bamb')
-        for cls in ITEM_CHILDREN:
+        for cls in ITEM_CLASSES:
             # write two items with specific str
             name_str = cls.__name__ + ' bambi'
             content_str = cls.__name__ + ' nany'
