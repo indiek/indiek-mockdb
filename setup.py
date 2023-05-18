@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(name='indiek-mockdb',
       python_requires='>=3.8',
-      version='0.1.6',
+      version='0.2.0',
       description='mock database for indiek',
       long_description="This is an extremely light-weight mock Database"
              "used by indiek-core for development and testing purposes."
