@@ -11,7 +11,7 @@ class TestItemAPI(unittest.TestCase):
         expected_attr = [
             'name',
             'content',
-            '_ikid',
+            'ikid',
             'to_dict'
         ]
         for attr_name in expected_attr:
@@ -29,7 +29,8 @@ class TestItemAPI(unittest.TestCase):
         self.assertNotEqual(definition, tmp_prf2)
 
         id1 = definition.save()
-        self.assertEqual(definition, Definition(_ikid=id1))
+        # breakpoint()
+        self.assertRaises(AssertionError, Definition, ikid=id1)
 
         # because of the type, definition not equal to tmp_prf1
         self.assertNotEqual(tmp_prf1, definition)
@@ -42,17 +43,17 @@ class TestItemIO(unittest.TestCase):
     def test_write_read(self):
         item1_dict = {'name': 'item1', 'content': 'blabla'}
         item1 = Definition(**item1_dict)
-        item1_dict['_ikid'] = item1.save()
+        item1_dict['ikid'] = item1.save()
 
         item2_dict = dict(name='item2', content='nslkdf')
         item2 = Theorem(**item2_dict)
-        item2_dict['_ikid'] = item2.save()
+        item2_dict['ikid'] = item2.save()
         del item1, item2
 
-        item1 = Definition.load(item1_dict['_ikid'])
+        item1 = Definition.load(item1_dict['ikid'])
         self.assertDictEqual(item1.to_dict(), item1_dict)
 
-        item2 = Theorem.load(item2_dict['_ikid'])
+        item2 = Theorem.load(item2_dict['ikid'])
         self.assertDictEqual(item2.to_dict(), item2_dict)
 
     def test_reload(self):
@@ -68,19 +69,19 @@ class TestItemIO(unittest.TestCase):
         ikid = definition.save()
         
         # overriding ID assigned to definition with a proof throws error
-        tmp_prf1._ikid = ikid
+        tmp_prf1.ikid = ikid
         self.assertRaises(MixedTypeOverrideError, tmp_prf1.save)
 
-        # but after deleting the saved oneit will work
+        # but after deleting the saved one it will work
         definition.delete()
         tmp_prf1.save()
         self.assertEqual(tmp_prf1.name, '')
 
         # override
-        new_prf = Proof(name='tournam', _ikid=ikid)
+        new_prf = Proof(name='tournam', ikid=ikid)
         new_prf.save()
         self.assertEqual(new_prf.name, 'tournam')
-        self.assertEqual(new_prf._ikid, ikid)
+        self.assertEqual(new_prf.ikid, ikid)
 
 
 class TestSearch(unittest.TestCase):

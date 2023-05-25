@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from typing import Sequence, Optional, List, Any
+from typing import Sequence, Optional, List, Any, Set, Tuple
 from frozendict import frozendict
 
 
@@ -13,48 +13,179 @@ class MixedTypeOverrideError(Exception):
     pass
 
 
+class UnsavedNestedNoteError(Exception):
+    """
+    A Note's content contains unsaved nested notes.
+    """
+    pass
+
+
 def generate_id(existing: Sequence[int]) -> int:
     """Generate ID."""
     return max(existing) + 1 if len(existing) else 0
 
 
-class Item:
+NESTED_NOTE = 'NeStEdNoTe'
+
+
+class Nucleus:
+    _item_dict = frozendict(
+        Definition={},  # keys MUST match class names from module
+        Theorem={},
+        Proof={},
+        Note={},
+        Question={}
+    )
+    """
+    All items are stored in this class variable. It is a nested dict. First level of 
+    keys are classes, and values are dicts. Second level of keys are item unique IDs 
+    (ikid) and values are dicts containing item data."""
+
+    @property
+    def existing_ids(self):
+        return set.union(*(set(d.keys()) for d in self._item_dict.values()))
+
+    def save(self):
+        cls = self.__class__
+
+        if self.ikid is not None:  # item has an ID
+            if self.ikid in self.existing_ids:  # ID already present in DB
+                if self.ikid not in self._item_dict[cls.__name__].keys():  # ID belongs to another type
+                    raise MixedTypeOverrideError()
+                # at this level we are dealing with an override; relegated to end of function
+                
+        else:  # we generate the ID
+            self.ikid = generate_id(self.existing_ids)
+
+        # we write or override safely
+        self._item_dict[cls.__name__][self.ikid] = self.to_dict()
+        return self.ikid
+    
+    def delete(self):
+        cls_name = self.__class__.__name__
+        idict = self._item_dict[cls_name]
+        ikid = self.ikid
+        try:
+            entry = idict[ikid]
+        except KeyError:
+            pass  # nothing to delete
+
+        if cls_name != 'Note':
+            # delete name and content notes
+            # TODO: I can foresee problems if name and content mutually refer to each other.
+            self.name.delete()
+            self.content.delete()
+
+        # delete actual entry
+        idict.pop(ikid)
+
+        # reset ikid to unsaved
+        self.ikid = None
+
+        # now we clean up all the mentions of this item
+        notes_dict = self._item_dict['Note']
+        for _, note_dict in notes_dict.items():
+            mentions = note_dict['mentions']
+            if ikid in mentions:
+                mentions.pop(ikid)
+
+    @classmethod
+    def load(cls, ikid: int) -> Nucleus:
+        """Load (instantiate) mockdb Item from its ID.
+
+        Args:
+            ikid (int): item ID in mockdb.
+
+        Returns:
+            Item: mockdb Item instance
+        """
+        dict_ = cls._item_dict[cls.__name__][ikid]
+        return cls(**dict_)
+
+
+class Note(Nucleus):
+    @staticmethod
+    def is_note(str_entry: str) -> Tuple[bool, int | None]:
+        is_note = str_entry.startswith(NESTED_NOTE)
+        ikid = str_entry[len(NESTED_NOTE):]
+        return is_note, ikid
+    
+    @classmethod
+    def flatten(cls, content):
+        to_return = []
+        for entry in content:
+            if isinstance(entry, str):
+                to_return.append(entry)
+            else:
+                if entry.ikid is None:
+                    raise UnsavedNestedNoteError()
+                to_return.append(NESTED_NOTE + str(entry.ikid))
+        return to_return
+
+    @classmethod
+    def from_core(cls, core_note):
+        return cls(
+            ikid=core_note.ikid, 
+            flat_content=cls.flatten(core_note.content),
+            mentions=core_note.mentions,
+            depth=core_note.depth,
+            children=core_note.children,
+            )
+    
+    def __init__(self, 
+                 flat_content: List[str], 
+                 mentions: Set[int],
+                 depth: int,
+                 children: Set[int],
+                 ikid: int | None = None):
+        self.flat_content = flat_content
+        self.mentions = mentions
+        self.ikid = ikid
+        self.depth = depth
+        self.children = children
+
+    def to_dict(self):
+        return dict(
+            ikid=self.ikid,
+            depth=self.depth,
+            children=self.children,
+            mentions=self.mentions,
+            flat_content=self.flat_content
+        )
+
+    @staticmethod
+    def create_empty():
+        return Note([], set(), 1, children=set())
+
+
+PointerNote = Note
+
+
+class Item(Nucleus):
     """Class that represents genericItem in mockdb.
 
     In mockdb, all items are stored in the class variable `Item._item_dict`.
 
     Unless specified, attributes below should be compatible
-    with indiek-core.
+    with indiek-core.self
 
     Attributes:
-        name (str): item name.
-        content (str): item content.
-        _ikid (int): ID of item in mockdb. This is not part of indiek-core API.
+        name (int): ikid of Note for item name.
+        content (int): ikid of Note for item content.
+        ikid (int): ID of item in mockdb. This is not part of indiek-core API.
     """
 
-    _item_dict = frozendict(
-        Definition = {},  # keys MUST match class names from module
-        Theorem = {},
-        Proof = {},
-        Note = {},
-        Question = {}
-    )
-    """
-    All items are stored in this class variable. It is a nested dict. First level of 
-    keys are classes, and values are dicts. Second level of keys are item unique IDs 
-    (_ikid) and values are dicts containing item data."""
-
-    _attr_defs = ['name', 'content', '_ikid']
+    _attr_defs = ['name', 'content', 'ikid']
     """List of attr that fully define an Item."""
 
     def __repr__(self):
-        _ikid = self._ikid
+        ikid = self.ikid
         name = self.name
         content_hash = hash(self.content)
-        return f"MockDB Item:{_ikid=};{name=};{content_hash=}"
+        return f"MockDB Item:{ikid=};{name=};{content_hash=}"
 
     def __str__(self):
-        return f"MockDB Item with ID {self._ikid} and name {self.name}"
+        return f"MockDB Item with ID {self.ikid} and name {self.name}"
 
     def __eq__(self, other) -> bool:
         attr_eq = all(getattr(self, a) == getattr(other, a) for a in Item._attr_defs)
@@ -62,40 +193,34 @@ class Item:
 
     def __init__(
             self, *,
-            name: str = '',
-            content: str = '',
-            _ikid: Optional[int] = None
+            name: Optional[int] = None,
+            content: Optional[int] = None,
+            ikid: Optional[int] = None
     ):
         """Initialize Item.
 
         Args:
-            name (str, optional): item name. Defaults to ''.
-            content (str, optional): item description. Defaults to ''.
-            _ikid (int, optional): item id in mockdb; note that if the id corresponds to an existing
+            name (int, optional): item name. Defaults to None. This is the ikid of a Note.
+            content (int, optional): item description. Defaults to None. This is the ikid of a Note.
+            ikid (int, optional): item id in mockdb; note that if the id corresponds to an existing
                 item in the DB and a save operation occurs later on, the existing data will be overriden.
         """
-        self._ikid = _ikid
+        # breakpoint()
+        assert ikid not in self.existing_ids, "Attempt to instantiate an existing ikid."
+        self.ikid = ikid
         self.name = name
         self.content = content
 
     def save(self):
-        myclass = self.__class__.__name__
-
-        # check existing ids
-        existing_ids = set.union(*(set(d.keys()) for d in self._item_dict.values()))
-
-        if self._ikid is not None:  # item has an ID
-            if self._ikid in existing_ids:  # ID already present in DB
-                if self._ikid not in self._item_dict[myclass].keys():  # ID belongs to another type
-                    raise MixedTypeOverrideError()
-                # at this level we are dealing with an override; relegated to end of function
-                
-        else:  # we generate the ID
-            self._ikid = generate_id(existing_ids)
-
-        # we write or override safely
-        self._item_dict[myclass][self._ikid] = self.to_dict()
-        return self._ikid
+        super().save()
+        for attr_name in set(self._attr_defs) - {'ikid'}:
+            attr_val = getattr(self, attr_name)
+            if attr_val is None:
+                note = Note.create_empty()
+            else:
+                note = Note.load(attr_val)
+            note.save()
+        return self.ikid
 
     def to_dict(self):
         """Return mockdb Item instance content as dict.
@@ -104,16 +229,11 @@ class Item:
             dict: mockdb Item instance
         """
         return {a: getattr(self, a) for a in self._attr_defs}
-    
-    def delete(self):
-        if self._ikid is not None:
-            self._item_dict[self.__class__.__name__].pop(self._ikid)
-            self._ikid = None
 
     def reload(self):
-        """Reload written values if _ikid exists otherwise nothing happens."""
-        if self._ikid is not None:
-            written = self._item_dict[self.__class__.__name__][self._ikid]
+        """Reload written values if ikid exists otherwise nothing happens."""
+        if self.ikid is not None:
+            written = self._item_dict[self.__class__.__name__][self.ikid]
             for attribute in self._attr_defs:
                 setattr(self, attribute, written[attribute])
     
@@ -129,6 +249,7 @@ class Item:
         Returns:
             List[Item]: filtered list of stored items
         """
+        # TODO: revisit
         filtered_dicts = []
         for item_dict in cls._item_dict[cls.__name__].values():
             if regex.search(item_dict['name']):
@@ -152,19 +273,6 @@ class Item:
         return cls(**pure_item.to_dict())
 
     @classmethod
-    def load(cls, _ikid: int) -> Item:
-        """Load (instantiate) mockdb Item from its ID.
-
-        Args:
-            _ikid (int): item ID in mockdb.
-
-        Returns:
-            Item: mockdb Item instance
-        """
-        dict_ = cls._item_dict[cls.__name__][_ikid]
-        return cls(**dict_)
-
-    @classmethod
     def list_all(cls) -> List[Item]:
         """Fetch all stored mockdb items as a list.
 
@@ -180,7 +288,6 @@ class Item:
 class Definition(Item): pass
 class Theorem(Item): pass
 class Proof(Item): pass
-class Note(Item): pass
 class Question(Item): pass
 
 
@@ -188,6 +295,5 @@ ITEM_CLASSES = [
     Definition, 
     Theorem, 
     Proof,
-    Note,
     Question,
     ]
