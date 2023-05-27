@@ -86,7 +86,7 @@ class TestItemIO(unittest.TestCase):
 
         # edit name
         proof_name.flat_content =["tournam"]
-        # breakpoint()
+        proof_name.save()
         tmp_prf1.save()  # TODO: saving propagates?
         # breakpoint()
         self.assertEqual(tmp_prf1.load_note('name').str, 'tournam')
@@ -103,18 +103,20 @@ class TestSearch(unittest.TestCase):
         self.assertIn(item3, stored)
 
     def test_str_filter(self):
-        bambi = re.compile('bambi')
-        nany = re.compile('nany')
-        bamb = re.compile('bamb')
+        bambi = 'bambi'
+        nany = 'nany'
+        bamb = 'bamb'
         for cls in ITEM_CLASSES:
             # write two items with specific str
             name_str = cls.__name__ + ' bambi'
             content_str = cls.__name__ + ' nany'
-            cls(name=name_str, content=content_str).save()
+            item = cls(name=name_str, content=content_str)
+            item.save()
 
             name_str = cls.__name__ + ' bamboo'
             content_str = cls.__name__ + ' granny'
-            cls(name=name_str, content=content_str).save()
+            item2 = cls(name=name_str, content=content_str)
+            item2.save()
         
             # check correct counts returned
             with_bambi = len(cls.str_filter(bambi))

@@ -2,6 +2,7 @@ from __future__ import annotations
 import re
 from typing import Sequence, Optional, List, Any, Set, Tuple
 from frozendict import frozendict
+from indiek.mockdb.search import build_search_query
 
 
 
@@ -74,8 +75,8 @@ class Nucleus:
         if cls_name != 'Note':
             # delete name and content notes
             # TODO: I can foresee problems if name and content mutually refer to each other.
-            Note.load(self.name).delete()
-            Note.load(self.content).delete()
+            self.load_note('name').delete()
+            self.load_note('content').delete()
 
         # delete actual entry
         idict.pop(ikid)
@@ -102,6 +103,16 @@ class Nucleus:
         """
         dict_ = cls._item_dict[cls.__name__][ikid]
         return cls(**dict_, forbid_existing=False)
+    
+    @classmethod
+    def list_all(cls) -> List[Item]:
+        """Fetch all stored mockdb items as a list.
+
+        Returns:
+            List[Item]: stored items.
+        """
+        class_items = cls._item_dict[cls.__name__]
+        return list(map(cls.load, class_items.keys()))
 
 
 class Note(Nucleus):
@@ -160,10 +171,21 @@ class Note(Nucleus):
         )
 
     @staticmethod
-    def create_empty():
-        return Note([], set(), 1, children=set())
+    def create_empty(save: bool = False):
+        empty = Note([], set(), 1, children=set())
+        if save:
+            empty.save()
+        return empty
 
-
+    @staticmethod
+    def create_from_strings(strings: List[str], save: bool = False):
+        empty = Note.create_empty()
+        empty.flat_content = strings
+        if save:
+            empty.save()
+        return empty
+    
+    
 PointerNote = Note
 
 
@@ -199,39 +221,40 @@ class Item(Nucleus):
 
     def __init__(
             self, *,
-            name: Optional[int] = None,
-            content: Optional[int] = None,
+            name: Optional[int | str] = None,
+            content: Optional[int | str] = None,
             ikid: Optional[int] = None,
             forbid_existing: bool = True
     ):
         """Initialize Item.
 
         Args:
-            name (int, optional): item name. Defaults to None. This is the ikid of a Note.
-            content (int, optional): item description. Defaults to None. This is the ikid of a Note.
+            name (int | str, optional): item name. Defaults to None. This is the ikid of a Note.
+            content (int | str, optional): item description. Defaults to None. This is the ikid of a Note.
             ikid (int, optional): item id in mockdb; note that if the id corresponds to an existing
                 item in the DB and a save operation occurs later on, the existing data will be overriden.
         """
-        # breakpoint()
-        
         super().__init__(ikid, forbid_existing=forbid_existing)
-        self.name = name
-        self.content = content
-
-    def load_note(self, attr_name):
-        return Note.load(getattr(self, attr_name))
-    
-    def save(self):
+        for arg, attr_name in zip([name, content], ['name', 'content']):
+            if isinstance(arg, str):
+                name_ikid = Note.create_from_strings([arg]).save()
+            elif isinstance(arg, int):
+                name_ikid = arg
+            else:
+                name_ikid = Note.create_empty().save()
+            setattr(self, attr_name, name_ikid)
+        
+    def save(self):  # TODO: any hope to resolve the autosave of name and content?
         super().save()
-        # breakpoint()
         for attr_name in set(self._attr_defs) - {'ikid'}:
             attr_val = getattr(self, attr_name)
             if attr_val is None:
                 note = Note.create_empty()
-            else:  # TODO: this overrides the note...
-                note = Note.load(attr_val)
-            setattr(self, attr_name, note.save())
+                setattr(self, attr_name, note.save())
         return self.ikid
+
+    def load_note(self, attr_name):
+        return Note.load(getattr(self, attr_name))
 
     def to_dict(self):
         """Return mockdb Item instance content as dict.
@@ -249,27 +272,29 @@ class Item(Nucleus):
                 setattr(self, attribute, written[attribute])
     
     @classmethod
-    def str_filter(cls, regex: re.Pattern):
+    def str_filter(cls, search_str: str):
         """Return list of items from specified class with a regex match.
 
         Regex is applied on name and content attr.
 
         Args:
-            regex (re.Pattern): regex to match
+            search_str (str): regex to match
 
         Returns:
             List[Item]: filtered list of stored items
         """
-        # TODO: revisit
-        filtered_dicts = []
-        for item_dict in cls._item_dict[cls.__name__].values():
-            if regex.search(item_dict['name']):
-                filtered_dicts.append(item_dict)
-                continue
-            if regex.search(item_dict['content']):
-                filtered_dicts.append(item_dict)
 
-        return [cls(**item_dict) for item_dict in filtered_dicts]
+        regex = build_search_query(search_str)
+        filtered_ikids = []
+        for ikid in cls._item_dict[cls.__name__].keys():
+            item = cls.load(ikid)
+            name_note = item.load_note('name')
+            content_note = item.load_note('content')
+            full_str = name_note.str + ' ' + content_note.str
+            if regex.search(full_str):
+                filtered_ikids.append(ikid)
+
+        return list(map(cls.load, filtered_ikids))
 
     @classmethod
     def from_core(cls, pure_item: Any) -> Item:
@@ -282,16 +307,6 @@ class Item(Nucleus):
             type(self): mockdb Item instance
         """
         return cls(**pure_item.to_dict())
-
-    @classmethod
-    def list_all(cls) -> List[Item]:
-        """Fetch all stored mockdb items as a list.
-
-        Returns:
-            List[Item]: stored items.
-        """
-        class_items = cls._item_dict[cls.__name__]
-        return [cls(**item_dict) for item_dict in class_items.values()]
 
 
 # TODO: automate class create below (__new__?)
