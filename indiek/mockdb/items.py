@@ -41,6 +41,11 @@ class Nucleus:
     keys are classes, and values are dicts. Second level of keys are item unique IDs 
     (ikid) and values are dicts containing item data."""
 
+    def __init__(self, ikid: int | None, forbid_existing: bool = True) -> None:
+        if forbid_existing:
+            assert ikid not in self.existing_ids, "Attempt to instantiate an existing ikid."
+        self.ikid = ikid
+
     @property
     def existing_ids(self):
         return set.union(*(set(d.keys()) for d in self._item_dict.values()))
@@ -65,16 +70,12 @@ class Nucleus:
         cls_name = self.__class__.__name__
         idict = self._item_dict[cls_name]
         ikid = self.ikid
-        try:
-            entry = idict[ikid]
-        except KeyError:
-            pass  # nothing to delete
 
         if cls_name != 'Note':
             # delete name and content notes
             # TODO: I can foresee problems if name and content mutually refer to each other.
-            self.name.delete()
-            self.content.delete()
+            Note.load(self.name).delete()
+            Note.load(self.content).delete()
 
         # delete actual entry
         idict.pop(ikid)
@@ -100,7 +101,7 @@ class Nucleus:
             Item: mockdb Item instance
         """
         dict_ = cls._item_dict[cls.__name__][ikid]
-        return cls(**dict_)
+        return cls(**dict_, forbid_existing=False)
 
 
 class Note(Nucleus):
@@ -132,15 +133,20 @@ class Note(Nucleus):
             children=core_note.children,
             )
     
+    @property
+    def str(self):
+        return ' '.join(self.flat_content)
+    
     def __init__(self, 
                  flat_content: List[str], 
                  mentions: Set[int],
                  depth: int,
                  children: Set[int],
-                 ikid: int | None = None):
+                 ikid: int | None = None,
+                 forbid_existing: bool = True):
+        super().__init__(ikid, forbid_existing=forbid_existing)
         self.flat_content = flat_content
         self.mentions = mentions
-        self.ikid = ikid
         self.depth = depth
         self.children = children
 
@@ -195,7 +201,8 @@ class Item(Nucleus):
             self, *,
             name: Optional[int] = None,
             content: Optional[int] = None,
-            ikid: Optional[int] = None
+            ikid: Optional[int] = None,
+            forbid_existing: bool = True
     ):
         """Initialize Item.
 
@@ -206,20 +213,24 @@ class Item(Nucleus):
                 item in the DB and a save operation occurs later on, the existing data will be overriden.
         """
         # breakpoint()
-        assert ikid not in self.existing_ids, "Attempt to instantiate an existing ikid."
-        self.ikid = ikid
+        
+        super().__init__(ikid, forbid_existing=forbid_existing)
         self.name = name
         self.content = content
 
+    def load_note(self, attr_name):
+        return Note.load(getattr(self, attr_name))
+    
     def save(self):
         super().save()
+        # breakpoint()
         for attr_name in set(self._attr_defs) - {'ikid'}:
             attr_val = getattr(self, attr_name)
             if attr_val is None:
                 note = Note.create_empty()
-            else:
+            else:  # TODO: this overrides the note...
                 note = Note.load(attr_val)
-            note.save()
+            setattr(self, attr_name, note.save())
         return self.ikid
 
     def to_dict(self):

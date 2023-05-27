@@ -1,5 +1,10 @@
 import unittest
-from indiek.mockdb.items import Definition, Theorem, Proof, ITEM_CLASSES, MixedTypeOverrideError
+from indiek.mockdb.items import (Definition, 
+                                 Theorem, 
+                                 Proof, 
+                                 ITEM_CLASSES, 
+                                 MixedTypeOverrideError,
+                                 Note)
 import re
 
 
@@ -63,7 +68,7 @@ class TestItemIO(unittest.TestCase):
         item.reload()
         self.assertEqual(item.name, 'blabla')
 
-    def test_override(self):
+    def test_more_io(self):
         definition = Definition()
         tmp_prf1 = Proof()
         ikid = definition.save()
@@ -73,15 +78,19 @@ class TestItemIO(unittest.TestCase):
         self.assertRaises(MixedTypeOverrideError, tmp_prf1.save)
 
         # but after deleting the saved one it will work
+        # breakpoint()
         definition.delete()
         tmp_prf1.save()
-        self.assertEqual(tmp_prf1.name, '')
+        proof_name = tmp_prf1.load_note('name')
+        self.assertEqual(proof_name.str, '')
 
-        # override
-        new_prf = Proof(name='tournam', ikid=ikid)
-        new_prf.save()
-        self.assertEqual(new_prf.name, 'tournam')
-        self.assertEqual(new_prf.ikid, ikid)
+        # edit name
+        proof_name.flat_content =["tournam"]
+        # breakpoint()
+        tmp_prf1.save()  # TODO: saving propagates?
+        # breakpoint()
+        self.assertEqual(tmp_prf1.load_note('name').str, 'tournam')
+        self.assertEqual(tmp_prf1.ikid, ikid)
 
 
 class TestSearch(unittest.TestCase):
