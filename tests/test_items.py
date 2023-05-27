@@ -56,17 +56,21 @@ class TestItemIO(unittest.TestCase):
         del item1, item2
 
         item1 = Definition.load(item1_dict['ikid'])
-        self.assertDictEqual(item1.to_dict(), item1_dict)
+        self.assertEqual(item1.load_note('name').str, item1_dict['name'])
+        self.assertEqual(item1.load_note('content').str, item1_dict['content'])
+        self.assertEqual(item1.ikid, item1_dict['ikid'])
 
         item2 = Theorem.load(item2_dict['ikid'])
-        self.assertDictEqual(item2.to_dict(), item2_dict)
+        self.assertEqual(item2.load_note('name').str, item2_dict['name'])
+        self.assertEqual(item2.load_note('content').str, item2_dict['content'])
+        self.assertEqual(item2.ikid, item2_dict['ikid'])
 
     def test_reload(self):
         item = Definition(name='blabla')
         item.save()
         item.name='fake'
         item.reload()
-        self.assertEqual(item.name, 'blabla')
+        self.assertEqual(item.load_note('name').str, 'blabla')
 
     def test_more_io(self):
         definition = Definition()
@@ -119,6 +123,7 @@ class TestSearch(unittest.TestCase):
             item2.save()
         
             # check correct counts returned
+            # breakpoint()
             with_bambi = len(cls.str_filter(bambi))
             self.assertEqual(with_bambi, 1)
             with_nany = len(cls.str_filter(nany))

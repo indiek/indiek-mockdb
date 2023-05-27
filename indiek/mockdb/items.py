@@ -238,19 +238,19 @@ class Item(Nucleus):
         for arg, attr_name in zip([name, content], ['name', 'content']):
             if isinstance(arg, str):
                 name_ikid = Note.create_from_strings([arg]).save()
-            elif isinstance(arg, int):
-                name_ikid = arg
             else:
-                name_ikid = Note.create_empty().save()
+                # This block covers both cases when arg is an int and when
+                # arg is None. In the latter case, no Note is created nor saved
+                name_ikid = arg
             setattr(self, attr_name, name_ikid)
         
     def save(self):  # TODO: any hope to resolve the autosave of name and content?
-        super().save()
         for attr_name in set(self._attr_defs) - {'ikid'}:
             attr_val = getattr(self, attr_name)
             if attr_val is None:
                 note = Note.create_empty()
                 setattr(self, attr_name, note.save())
+        super().save()
         return self.ikid
 
     def load_note(self, attr_name):
