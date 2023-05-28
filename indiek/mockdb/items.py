@@ -247,6 +247,7 @@ class Item(Nucleus):
     def save(self):  # TODO: any hope to resolve the autosave of name and content?
         for attr_name in set(self._attr_defs) - {'ikid'}:
             attr_val = getattr(self, attr_name)
+            # if name or content is None, create empty note and save it.
             if attr_val is None:
                 note = Note.create_empty()
                 setattr(self, attr_name, note.save())
